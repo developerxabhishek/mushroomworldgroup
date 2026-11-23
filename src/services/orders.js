@@ -17,7 +17,12 @@ function toOrderResponse(order) {
     orderId: String(order._id),
     status: order.status,
     reservedUntil: order.reservedUntil.toISOString(),
-    lines: order.lines.map((l) => ({ batchId: String(l.batchId), grams: l.grams, amountPaise: l.amountPaise })),
+    lines: order.lines.map((l) => {
+      const line = { batchId: String(l.batchId), grams: l.grams, amountPaise: l.amountPaise };
+      // Part C: Grade B lines used to fill a Grade A shortfall are marked clearly.
+      if (l.substituted) Object.assign(line, { grade: l.grade, substituted: true });
+      return line;
+    }),
     totalPaise: order.totalPaise,
     shortfallGrams: order.shortfallGrams,
   };
@@ -51,12 +56,10 @@ async function placeOrder({ distributorId, idempotencyKey, input, now = new Date
   );
 }
 
-async function reserveStock({ distributorId, input, now, session }) {
-  const { product, grade, grams, deliveryDate, allowPartial } = input;
-
-  // 1) Candidate batches: same product, SAME grade (A and B never mix),
-  //    still valid at 23:59:59 IST on the delivery day, first-expiring first.
-  const candidates = await Batch.find({
+// Batches of one product + grade that are still valid at 23:59:59 IST on the delivery day,
+// first-expiring first.
+function findUsableBatches({ product, grade, deliveryDate, session }) {
+  return Batch.find({
     product,
     grade,
     remainingGrams: { $gt: 0 },
@@ -64,10 +67,25 @@ async function reserveStock({ distributorId, input, now, session }) {
   })
     .sort({ expiresAt: 1, _id: 1 })
     .session(session);
+}
 
-  // 2) Plan in memory first. Decide BEFORE touching any stock.
-  const plan = planAllocation(candidates, grams);
-  if (plan.allocatedGrams === 0 || (plan.shortfallGrams > 0 && !allowPartial)) {
+async function reserveStock({ distributorId, input, now, session }) {
+  const { product, grade, grams, deliveryDate, allowPartial, allowSubstitute } = input;
+
+  // 1) Plan from the requested grade only (A and B never mix).
+  //    Plan in memory first. Decide BEFORE touching any stock.
+  const plan = planAllocation(await findUsableBatches({ product, grade, deliveryDate, session }), grams);
+  const picks = plan.picks.map((p) => ({ ...p, grade, substituted: false }));
+  let { shortfallGrams } = plan;
+
+  // 2) Part C: Grade A is short and the distributor sent allowSubstitute → fill the rest from Grade B.
+  if (shortfallGrams > 0 && grade === 'A' && allowSubstitute) {
+    const planB = planAllocation(await findUsableBatches({ product, grade: 'B', deliveryDate, session }), shortfallGrams);
+    picks.push(...planB.picks.map((p) => ({ ...p, grade: 'B', substituted: true })));
+    shortfallGrams = planB.shortfallGrams;
+  }
+
+  if (picks.length === 0 || (shortfallGrams > 0 && !allowPartial)) {
     return { status: 409, body: { error: 'INSUFFICIENT_STOCK' } };
   }
 
@@ -78,7 +96,7 @@ async function reserveStock({ distributorId, input, now, session }) {
   // 3) Apply: guarded atomic decrement per batch. The filter `remainingGrams >= take`
   //    means the update can never push stock below zero.
   const lines = [];
-  for (const { batch, grams: take } of plan.picks) {
+  for (const { batch, grams: take, grade: lineGrade, substituted } of picks) {
     const result = await Batch.updateOne(
       { _id: batch._id, remainingGrams: { $gte: take } },
       { $inc: { remainingGrams: -take } },
@@ -89,12 +107,12 @@ async function reserveStock({ distributorId, input, now, session }) {
     const amountPaise = priceLine({
       grams: take,
       basePricePerKgPaise: PRODUCTS[product].basePricePerKgPaise,
-      grade,
+      grade: lineGrade, // substituted lines are priced at Grade B price
       tier,
       expiresAt: batch.expiresAt,
       now,
     });
-    lines.push({ batchId: batch._id, grams: take, amountPaise });
+    lines.push({ batchId: batch._id, grams: take, amountPaise, grade: lineGrade, substituted });
   }
 
   await Ledger.insertMany(
@@ -113,9 +131,10 @@ async function reserveStock({ distributorId, input, now, session }) {
         deliveryDate,
         requestedGrams: grams,
         allowPartial,
+        allowSubstitute,
         lines,
         totalPaise: lines.reduce((sum, l) => sum + l.amountPaise, 0), // integer sum → exact
-        shortfallGrams: plan.shortfallGrams,
+        shortfallGrams,
         status: 'RESERVED',
         reservedUntil: new Date(now.getTime() + RESERVATION_MS),
       },

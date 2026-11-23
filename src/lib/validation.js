@@ -31,14 +31,15 @@ function validateBatchInput(body) {
 
 function validateOrderInput(body) {
   if (!isPlainObject(body)) return { error: 'body must be a JSON object' };
-  const { product, grade, grams, deliveryDate, allowPartial = false } = body;
+  const { product, grade, grams, deliveryDate, allowPartial = false, allowSubstitute = false } = body;
   if (!Object.hasOwn(PRODUCTS, product)) return { error: `product must be one of ${Object.keys(PRODUCTS).join(', ')}` };
   if (!GRADES.includes(grade)) return { error: 'grade must be A or B' };
   if (!isPositiveGrams(grams)) return { error: 'grams must be a positive integer' };
   if (!isRealCalendarDate(deliveryDate)) return { error: 'deliveryDate must be a real date in YYYY-MM-DD format' };
   if (typeof allowPartial !== 'boolean') return { error: 'allowPartial must be a boolean' };
+  if (typeof allowSubstitute !== 'boolean') return { error: 'allowSubstitute must be a boolean' };
   // Fixed key order → the same logical request always hashes the same (idempotency).
-  return { value: { product, grade, grams, deliveryDate, allowPartial } };
+  return { value: { product, grade, grams, deliveryDate, allowPartial, allowSubstitute } };
 }
 
 module.exports = { validateBatchInput, validateOrderInput, isValidHeader, isObjectId };

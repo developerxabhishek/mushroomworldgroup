@@ -8,6 +8,8 @@ const orderLineSchema = new Schema(
     batchId: { type: Schema.Types.ObjectId, ref: 'Batch', required: true },
     grams: { type: Number, required: true },
     amountPaise: { type: Number, required: true },
+    grade: { type: String, required: true },
+    substituted: { type: Boolean, default: false }, // Part C: Grade B used to fill a Grade A shortfall
   },
   { _id: false },
 );
@@ -21,6 +23,7 @@ const orderSchema = new Schema(
     deliveryDate: { type: String, required: true }, // 'YYYY-MM-DD', IST calendar date
     requestedGrams: { type: Number, required: true },
     allowPartial: { type: Boolean, required: true },
+    allowSubstitute: { type: Boolean, default: false },
     lines: [orderLineSchema],
     totalPaise: { type: Number, required: true },
     shortfallGrams: { type: Number, required: true },
