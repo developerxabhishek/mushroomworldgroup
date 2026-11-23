@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 const mongoose = require('mongoose');
-const { PRODUCTS, RESERVATION_MS, DEFAULT_TIER } = require('../config');
+const { PRODUCTS, RESERVATION_MS_BY_TIER, DEFAULT_TIER } = require('../config');
 const { Batch, Order, Ledger, IdempotencyRecord, Distributor } = require('../models');
 const { inTransaction, withRetry, RetryableError } = require('../db');
 const { endOfDeliveryDayIST } = require('../lib/time');
@@ -136,7 +136,7 @@ async function reserveStock({ distributorId, input, now, session }) {
         totalPaise: lines.reduce((sum, l) => sum + l.amountPaise, 0), // integer sum → exact
         shortfallGrams,
         status: 'RESERVED',
-        reservedUntil: new Date(now.getTime() + RESERVATION_MS),
+        reservedUntil: new Date(now.getTime() + RESERVATION_MS_BY_TIER[tier]),
       },
     ],
     { session },

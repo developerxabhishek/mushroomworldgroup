@@ -5,7 +5,9 @@ const MONGODB_URI =
 const SWEEP_INTERVAL_MS = Number(process.env.SWEEP_INTERVAL_MS) || 10_000;
 
 const HOUR_MS = 60 * 60 * 1000;
-const RESERVATION_MS = 15 * 60 * 1000; // 15 minutes – in MILLISECONDS (Part A bug #6)
+const MINUTE_MS = 60 * 1000; // in MILLISECONDS (Part A bug #6)
+// How long an order stays RESERVED, by distributor tier. Part C: Platinum gets 30 minutes.
+const RESERVATION_MS_BY_TIER = { SILVER: 15 * MINUTE_MS, GOLD: 15 * MINUTE_MS, PLATINUM: 30 * MINUTE_MS };
 const IST_OFFSET_MS = 5.5 * HOUR_MS; // IST = UTC+05:30, India has no DST
 
 // Base prices are NOT given in the brief → assumed values, in paise per kg.
@@ -24,7 +26,7 @@ module.exports = {
   MONGODB_URI,
   SWEEP_INTERVAL_MS,
   HOUR_MS,
-  RESERVATION_MS,
+  RESERVATION_MS_BY_TIER,
   IST_OFFSET_MS,
   PRODUCTS,
   GRADES,
