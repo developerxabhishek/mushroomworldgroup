@@ -5,6 +5,9 @@
  * multi-document transactions are only available on replica sets.
  */
 
+// Load settings from .env (if the file exists) BEFORE anything reads process.env.
+require('dotenv').config({ quiet: true });
+
 const mongoose = require('mongoose');
 const { PORT } = require('./config');
 const { connectDb } = require('./db');
