@@ -1,0 +1,25 @@
+{
+  "name": "perishable-stock-allocation",
+  "version": "1.0.0",
+  "description": "Perishable stock & order allocation API (Node.js + Express + MongoDB)",
+  "main": "src/server.js",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "jest --runInBand",
+    "race": "node scripts/race.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^5.3.0",
+    "mongoose": "^8.24.10"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "mongodb-memory-server": "^10.4.3",
+    "supertest": "^7.3.2"
+  }
+}
